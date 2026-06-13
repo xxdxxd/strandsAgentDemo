@@ -1,6 +1,6 @@
 {
   "name": "Strands Agent Chatbot",
-  "description": "An interactive AI chatbot utilizing the Strands Agent Framework to execute multi-step tool calls for math, live weather search, and webpage content retrieval.",
+  "description": "An interactive SvelteKit AI chatbot utilizing the Strands Agent Framework to execute multi-step tool calls for math and live weather searches.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

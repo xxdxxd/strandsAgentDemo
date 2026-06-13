@@ -1,10 +1,10 @@
 /**
- * Strands Agent Framework - OpenAI SDK Multi-step Reasoning Client Core
+ * Strands Agent Framework - OpenAI SDK Multi-step Reasoning Client Core (SvelteKit server-only)
  */
 
 import OpenAI from 'openai';
-import { Message, ReasoningStep, ToolType, OpenAIConfig } from '../src/types';
-import { evaluateMath, fetchWeather, fetchWebPage } from './tools';
+import type { Message, ReasoningStep, ToolType, OpenAIConfig } from '$lib/types';
+import { evaluateMath, fetchWeather } from './tools';
 
 // Generate a random UUID-like ID for logs
 function generateId(): string {

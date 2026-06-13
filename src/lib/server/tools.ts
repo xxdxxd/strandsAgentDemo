@@ -1,8 +1,8 @@
 /**
- * Server-Side Tools Implementation for Strands Agent
+ * Server-Side Tools Implementation for Strands Agent (SvelteKit server-only)
  */
 
-import { ReasoningStep } from '../src/types';
+import type { ReasoningStep } from '$lib/types';
 
 /**
  * 1. Safe Mathematical Expression Parser
@@ -208,94 +208,3 @@ function mapWmoCode(code: number): string {
   return 'Cloudy';
 }
 
-/**
- * 3. Static Webpage Text Content Fetcher
- */
-export async function fetchWebPage(targetUrl: string): Promise<{
-  url: string;
-  title: string;
-  excerpt: string;
-}> {
-  // Validate URL structure
-  let urlObj: URL;
-  try {
-    urlObj = new URL(targetUrl);
-  } catch (err) {
-    throw new Error('Invalid URL format. Please make sure to include http:// or https://');
-  }
-
-  // Set timeout controller
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 6000); // 6s timeout
-
-  try {
-    const response = await fetch(urlObj.href, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 aistudio-build-agent',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-      }
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} failed to fetch URL.`);
-    }
-
-    const contentType = response.headers.get('content-type') || '';
-    if (!contentType.includes('text/html') && !contentType.includes('text/plain') && !contentType.includes('application/xhtml+xml') && !contentType.includes('application/json')) {
-      throw new Error(`Unsupported content type: ${contentType}. This tool can only fetch static HTML or plain text.`);
-    }
-
-    const html = await response.text();
-    
-    // Simple fast HTML text extraction (avoids parser dependencies for high runtime speed)
-    const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-    const title = titleMatch ? titleMatch[1].trim() : urlObj.hostname;
-
-    // Remove heavy script, style, SVG, and footer tags
-    let cleanText = html
-      .replace(/<script[\s\S]*?<\/script>/gi, '')
-      .replace(/<style[\s\S]*?<\/style>/gi, '')
-      .replace(/<svg[\s\S]*?<\/svg>/gi, '')
-      .replace(/<nav[\s\S]*?<\/nav>/gi, '')
-      .replace(/<header[\s\S]*?<\/header>/gi, '')
-      .replace(/<footer[\s\S]*?<\/footer>/gi, '')
-      .replace(/<!--[\s\S]*?-->/g, '');
-
-    // Strip remaining tags
-    cleanText = cleanText.replace(/<[^>]*>/g, ' ');
-
-    // Decode essential HTML entities
-    cleanText = cleanText
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'");
-
-    // Condense whitespace
-    cleanText = cleanText.replace(/\s+/g, ' ').trim();
-
-    // Limit excerpt size (to prevent token overflows)
-    const maxLength = 8000;
-    const excerpt = cleanText.length > maxLength 
-      ? cleanText.substring(0, maxLength) + '... [Content Truncated to prevent context overflow]'
-      : cleanText;
-
-    return {
-      url: urlObj.href,
-      title,
-      excerpt: excerpt || '(No readable text contents found on the page)'
-    };
-  } catch (error: any) {
-    clearTimeout(timeoutId);
-    if (error.name === 'AbortError') {
-      throw new Error('Connection timed out. The website takes too long to load.');
-    }
-    throw error;
-  }
-}
