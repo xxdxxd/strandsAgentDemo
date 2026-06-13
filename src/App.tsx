@@ -15,7 +15,12 @@ import {
   AlertCircle,
   Loader2,
   ChevronRight,
-  Sliders
+  Sliders,
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  ShieldAlert,
+  Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChatSession, Message, ToolType, ToolDefinition, ReasoningStep, OpenAIConfig } from './types';
@@ -35,13 +40,6 @@ const AVAILABLE_TOOLS: ToolDefinition[] = [
     description: 'Obtains coordinates and live temperature conditions for any global city.',
     icon: 'weather',
     parameterDescription: 'City: format e.g. "Tokyo" or "Paris, FR"'
-  },
-  {
-    id: 'fetch_url',
-    name: 'Webpage Fetcher',
-    description: 'Retrieves page title and extracts clean text content from static website URLs.',
-    icon: 'fetch_url',
-    parameterDescription: 'URL: format e.g. "https://example.com"'
   }
 ];
 
@@ -57,15 +55,22 @@ const SUGGESTED_PROMPTS = [
     label: "Multi-city Comparison"
   },
   {
-    text: "Get webpage content of https://example.com and summarize what it is.",
-    tools: ['fetch_url'] as ToolType[],
-    label: "Static URL Digest"
-  },
-  {
     text: "Calculate result of: (450 * 12) / (5.5 * 3^2)",
     tools: ['calculator'] as ToolType[],
     label: "Pure Pure Calculator"
   }
+];
+
+const PRESET_MODELS = [
+  { id: 'openai/gpt-4o-mini', label: 'GPT-4o Mini (OpenAI)' },
+  { id: 'openai/gpt-4o', label: 'GPT-4o (OpenAI)' },
+  { id: 'openai/o1-mini', label: 'o1-mini (OpenAI)' },
+  { id: 'openai/o3-mini', label: 'o3-mini (OpenAI)' },
+  { id: 'anthropic/claude-3.5-sonnet', label: 'Claude 3.5 Sonnet' },
+  { id: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+  { id: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+  { id: 'deepseek/deepseek-chat', label: 'DeepSeek V3' },
+  { id: 'deepseek/deepseek-reasoner', label: 'DeepSeek R1' },
 ];
 
 const getInitialSessions = (): ChatSession[] => {
@@ -86,7 +91,7 @@ const getInitialSessions = (): ChatSession[] => {
       id: 'default-session-id',
       title: 'First Chat Conversation',
       createdAt: Date.now(),
-      enabledTools: ['calculator', 'weather', 'fetch_url'],
+      enabledTools: ['calculator', 'weather'],
       messages: [
         {
           id: 'welcome',
@@ -109,18 +114,28 @@ export default function App() {
   const [enabledTools, setEnabledTools] = useState<ToolType[]>(() => {
     const initial = getInitialSessions();
     const active = initial[0];
-    return active?.enabledTools || ['calculator', 'weather', 'fetch_url'];
+    return active?.enabledTools || ['calculator', 'weather'];
   });
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
 
-  // OpenAI dynamic model & key credentials state configuration
+  // OpenRouter or OpenAI dynamic model & key credentials state configuration
   const [openAIApiKey, setOpenAIApiKey] = useState<string>(() => localStorage.getItem('strands_openai_key') || '');
-  const [openAIBaseURL, setOpenAIBaseURL] = useState<string>(() => localStorage.getItem('strands_openai_base_url') || 'https://api.openai.com/v1');
-  const [openAIModel, setOpenAIModel] = useState<string>(() => localStorage.getItem('strands_openai_model') || 'gpt-4o-mini');
+  const [showApiKeyText, setShowApiKeyText] = useState<boolean>(false);
+  const [openAIBaseURL, setOpenAIBaseURL] = useState<string>(() => {
+    const saved = localStorage.getItem('strands_openai_base_url');
+    if (saved && saved !== 'https://api.openai.com/v1') return saved;
+    return 'https://openrouter.ai/api/v1';
+  });
+  const [openAIModel, setOpenAIModel] = useState<string>(() => {
+    const saved = localStorage.getItem('strands_openai_model');
+    if (saved && saved !== 'gpt-4o-mini') return saved;
+    return 'openai/gpt-4o-mini';
+  });
   
   // Real-time server connectivity health checker
   const [serverStatus, setServerStatus] = useState<'checking' | 'connected' | 'error'>('checking');
+  const [hasServerEnvKey, setHasServerEnvKey] = useState<boolean>(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -150,7 +165,9 @@ export default function App() {
       try {
         const response = await fetch('/api/health');
         if (response.ok) {
+          const data = await response.json().catch(() => ({}));
           setServerStatus('connected');
+          setHasServerEnvKey(!!data.hasEnvKey);
         } else {
           setServerStatus('error');
         }
@@ -302,7 +319,7 @@ export default function App() {
         id: 'default-session-id',
         title: 'First Chat Conversation',
         createdAt: Date.now(),
-        enabledTools: ['calculator', 'weather', 'fetch_url'],
+        enabledTools: ['calculator', 'weather'],
         messages: [{
           id: 'welcome-reset',
           role: 'model',
@@ -325,7 +342,6 @@ export default function App() {
     switch (id) {
       case 'calculator': return <Calculator className="w-4 h-4 text-emerald-500" />;
       case 'weather': return <CloudSun className="w-4 h-4 text-amber-500" />;
-      case 'fetch_url': return <Globe className="w-4 h-4 text-sky-500" />;
       default: return <Settings className="w-4 h-4 text-slate-500" />;
     }
   };
@@ -511,30 +527,74 @@ export default function App() {
               </div>
             </div>
 
-            {/* OpenAI Configuration preferences */}
+            {/* OpenRouter & OpenAI Configuration preferences */}
             <div className="border-t border-slate-100 dark:border-slate-800/80 pt-4 space-y-3.5">
               <div className="flex items-center gap-2 px-1 border-b border-transparent">
                 <Sliders className="w-3.5 h-3.5 text-blue-650 dark:text-blue-400" />
                 <h3 className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-                  OpenAI Settings
+                  OpenRouter Settings
                 </h3>
               </div>
 
               <div className="space-y-2.5 px-1">
                 <div>
-                  <label className="block text-[10px] font-semibold text-slate-505 dark:text-slate-400 mb-1">
-                    API Key
-                  </label>
-                  <input
-                    type="password"
-                    value={openAIApiKey}
-                    onChange={(e) => setOpenAIApiKey(e.target.value)}
-                    placeholder="sk-... (Falls back to env settings)"
-                    className="w-full text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 p-2 focus:outline-hidden focus:ring-1 focus:ring-blue-500"
-                  />
-                  <span className="text-[9px] text-slate-400 dark:text-slate-500 block mt-0.5 leading-tight">
-                    Stored securely in your local browser storage.
-                  </span>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-[10px] font-semibold text-slate-505 dark:text-slate-400">
+                      API Key (OpenRouter or OpenAI)
+                    </label>
+                    {openAIApiKey && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOpenAIApiKey('');
+                          localStorage.removeItem('strands_openai_key');
+                        }}
+                        className="text-[9px] text-red-500 hover:text-red-600 dark:text-red-400 flex items-center gap-0.5 outline-none font-medium"
+                        title="Clear API Key from Browser LocalStorage"
+                      >
+                        <Trash2 className="w-2.5 h-2.5" />
+                        <span>Clear Saved Key</span>
+                      </button>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showApiKeyText ? "text" : "password"}
+                      value={openAIApiKey}
+                      onChange={(e) => setOpenAIApiKey(e.target.value)}
+                      placeholder={hasServerEnvKey ? "✔ Using server environment key" : "sk-or-... (Falls back to env settings)"}
+                      className="w-full text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 p-2 pr-8 focus:outline-hidden focus:ring-1 focus:ring-blue-500 font-mono text-slate-800 dark:text-slate-200"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowApiKeyText(!showApiKeyText)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 outline-none"
+                    >
+                      {showApiKeyText ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                  
+                  {/* Dynamic security and Git Leak prevention indicator */}
+                  <div className="mt-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/30 border border-slate-100 dark:border-slate-800/80 text-[10px] leading-relaxed space-y-1.5">
+                    {hasServerEnvKey ? (
+                      <div className="flex items-start gap-1.5 text-emerald-600 dark:text-emerald-400">
+                        <ShieldCheck className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-semibold">Secure Key Detected:</span> A server-side environment key is currently active. You can safely leave this input completely blank.
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-1.5 text-amber-600 dark:text-amber-400">
+                        <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-semibold">No Host Key Detected:</span> Defaulting to client key provided above or system default sandbox.
+                        </div>
+                      </div>
+                    )}
+                    <div className="text-slate-500 dark:text-slate-400 border-t border-slate-150/40 dark:border-slate-800/40 pt-1.5 text-[9px]">
+                      🔒 <span className="font-semibold text-slate-600 dark:text-slate-350">GitHub Leak Protection:</span> Your server-side settings reside in <code>.env</code> which is fully ignored in <code>.gitignore</code> (rules for <code>.env*</code> are pre-configured). Storing credentials on your host backend prevents secrets from ever reaching your GitHub commits.
+                    </div>
+                  </div>
                 </div>
 
                 <div>
@@ -545,23 +605,50 @@ export default function App() {
                     type="text"
                     value={openAIBaseURL}
                     onChange={(e) => setOpenAIBaseURL(e.target.value)}
-                    placeholder="https://api.openai.com/v1"
+                    placeholder="https://openrouter.ai/api/v1"
                     className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 p-2 focus:outline-hidden focus:ring-1 focus:ring-blue-500 font-mono"
                   />
                 </div>
 
                 <div>
                   <label className="block text-[10px] font-semibold text-slate-505 dark:text-slate-400 mb-1">
-                    Model Identifier
+                    Language Model Preset
                   </label>
-                  <input
-                    type="text"
-                    value={openAIModel}
-                    onChange={(e) => setOpenAIModel(e.target.value)}
-                    placeholder="gpt-4o-mini"
-                    className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 p-2 focus:outline-hidden focus:ring-1 focus:ring-blue-500 font-mono"
-                  />
+                  <select
+                    value={PRESET_MODELS.some(p => p.id === openAIModel) ? openAIModel : 'custom'}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === 'custom') {
+                        setOpenAIModel('openai/gpt-4-turbo');
+                      } else {
+                        setOpenAIModel(val);
+                      }
+                    }}
+                    className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 p-2 focus:outline-hidden focus:ring-1 focus:ring-blue-500 text-slate-800 dark:text-slate-200"
+                  >
+                    {PRESET_MODELS.map((preset) => (
+                      <option key={preset.id} value={preset.id} className="bg-white dark:bg-slate-900">
+                        {preset.label}
+                      </option>
+                    ))}
+                    <option value="custom" className="bg-white dark:bg-slate-900">Custom Model ID...</option>
+                  </select>
                 </div>
+
+                {(!PRESET_MODELS.some(p => p.id === openAIModel)) && (
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-505 dark:text-slate-400 mb-1">
+                      Custom Model Identifier
+                    </label>
+                    <input
+                      type="text"
+                      value={openAIModel}
+                      onChange={(e) => setOpenAIModel(e.target.value)}
+                      placeholder="e.g. openai/gpt-4o"
+                      className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 p-2 focus:outline-hidden focus:ring-1 focus:ring-blue-500 font-mono text-slate-850 dark:text-slate-200"
+                    />
+                  </div>
+                )}
               </div>
             </div>
 

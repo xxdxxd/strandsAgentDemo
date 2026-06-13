@@ -2,7 +2,7 @@
  * Shared Type Definitions for Strands Agent Chatbot
  */
 
-export type ToolType = 'calculator' | 'weather' | 'fetch_url';
+export type ToolType = 'calculator' | 'weather';
 
 export interface ToolDefinition {
   id: ToolType;

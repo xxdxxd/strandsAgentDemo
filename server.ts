@@ -22,7 +22,15 @@ async function startServer() {
 
   // 1. API - Health Checker
   app.get('/api/health', (req: Request, res: Response) => {
-    res.status(200).json({ status: 'ok', timestamp: Date.now() });
+    const hasApiKey = !!process.env.OPENAI_API_KEY && 
+                     process.env.OPENAI_API_KEY !== 'MY_OPENAI_API_KEY' && 
+                     process.env.OPENAI_API_KEY !== 'your_actual_api_key' &&
+                     process.env.OPENAI_API_KEY.trim() !== '';
+    res.status(200).json({ 
+      status: 'ok', 
+      timestamp: Date.now(),
+      hasEnvKey: hasApiKey
+    });
   });
 
   // 2. API - Core Chat Orchestration Trigger
@@ -35,7 +43,7 @@ async function startServer() {
         return;
       }
 
-      // Run our agentic reasoning loop using OpenAI (falls back to local sandbox gracefully if key is missing)
+      // Run our agentic reasoning loop using OpenAI
       const result = await runAgentLoop(message, history || [], enabledTools || [], openAIConfig);
       
       res.status(200).json(result);
